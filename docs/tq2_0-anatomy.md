@@ -124,8 +124,12 @@ against stock bitnet.cpp.
 
 ## Quality (perplexity) — measured on this tree
 
-llama-perplexity, WikiText-2 raw test set, CPU (`-ngl 0`), substrate = this
-repo at v0.1.0. Same corpus, commands, and binary for both columns.
+llama-perplexity, WikiText-2 raw test set (reconstructed from the
+Salesforce/wikitext parquet; corpus sha256 `bbf94c53a05abe9e…`), CPU
+(`-ngl 0`), substrate = this repo at v0.1.0. Same corpus, commands, and
+binary for both columns.
+
+**bf16-equivalent quality at 2.06 bits per weight.**
 
 | n_ctx | bf16 reference | TQ2_0 | relative Δ |
 |-------|---------------|-------|-----------|
@@ -138,6 +142,10 @@ to it costs, measured here, under 0.2% relative perplexity. Absolute values
 reflect an instruction-tuned model scored on raw text and are comparable
 only within this methodology; the columns share everything but the weights.
 
-**Conversion correctness:** a fresh bf16 → TQ2_0 conversion on this tree
-reproduces the distributed GGUF **byte-for-byte**
-(sha256 `9f8e1097502528a0d80d885c603ea7ee3e4d214a6685356e39baaf697c02cbb6`).
+## Conversion determinism
+
+A fresh bf16 → TQ2_0 conversion on this tree reproduces the distributed GGUF
+**byte-for-byte** (sha256
+`9f8e1097502528a0d80d885c603ea7ee3e4d214a6685356e39baaf697c02cbb6`):
+the converter is deterministic end-to-end, and the shipped artifact is exactly
+what this tree produces from Microsoft's bf16 checkpoint.

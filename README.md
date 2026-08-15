@@ -50,8 +50,12 @@ python convert_hf_to_gguf.py <path-to-bf16-snapshot> \
 Hardware always stated.
 ## Quality (perplexity) — measured on this tree
 
-llama-perplexity, WikiText-2 raw test set, CPU (`-ngl 0`), substrate = this
-repo at v0.1.0. Same corpus, commands, and binary for both columns.
+llama-perplexity, WikiText-2 raw test set (reconstructed from the
+Salesforce/wikitext parquet; corpus sha256 `bbf94c53a05abe9e…`), CPU
+(`-ngl 0`), substrate = this repo at v0.1.0. Same corpus, commands, and
+binary for both columns.
+
+**bf16-equivalent quality at 2.06 bits per weight.**
 
 | n_ctx | bf16 reference | TQ2_0 | relative Δ |
 |-------|---------------|-------|-----------|
