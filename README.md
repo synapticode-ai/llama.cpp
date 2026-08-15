@@ -1,3 +1,66 @@
+# llama.cpp — ternary fork (Synapticode)
+
+> **BitNet b1.58 2B4T on mainline llama.cpp at TQ2_0: 100 tok/s generation, 2.06 bits per weight, CPU-only, on a Mac mini M4 Pro.**
+
+This is [Synapticode](https://synapticode.ai)'s ternary fork of
+[ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp). Everything good
+about the engine below is upstream's work; our delta is deliberately small and
+precisely stated.
+
+## What this fork adds
+
+Two converter patches that complete BitNet b1.58 **2B4T** conversion support
+on mainline llama.cpp (upstream already ships the TQ2_0 format and kernels):
+
+1. `conversion/bitnet.py` — `set_vocab` falls back to the GPT-2/BPE path when
+   `tokenizer.model` is absent (2B4T ships a Llama-3-style `tokenizer.json`
+   only).
+2. `gguf-py/gguf/tensor_mapping.py` — adds the `attn_sub_norm` /
+   `ffn_sub_norm` tensor names used by `microsoft/bitnet-b1.58-2B-4T`.
+
+Together they enable bf16 → TQ2_0 GGUF conversion of 2B4T. Format anatomy,
+kernel notes and the conversion walkthrough: **[docs/tq2_0-anatomy.md](docs/tq2_0-anatomy.md)**.
+
+## Quickstart
+
+```bash
+# 1. Build (CPU; TQ2_0 has no Metal path — NEON/AVX2 is the fast path)
+cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j
+
+# 2. Get the bf16 weights from Microsoft on Hugging Face (not redistributed here)
+#    https://huggingface.co/microsoft/bitnet-b1.58-2B-4T-bf16
+hf download microsoft/bitnet-b1.58-2B-4T-bf16
+
+# 3. Convert to TQ2_0
+python convert_hf_to_gguf.py <path-to-bf16-snapshot> \
+  --outfile bitnet-2b4t-tq2_0.gguf --outtype tq2_0
+
+# 4. Run (CPU)
+./build/bin/llama-cli -m bitnet-2b4t-tq2_0.gguf -ngl 0 -p "hello"
+```
+
+## Measured performance (BitNet b1.58 2B4T, CPU-only, Mac mini M4 Pro)
+
+| Metric | i2_s (bitnet.cpp) | TQ2_0 (this tree) | Speedup |
+|--------|-------------------|-------------------|---------|
+| Prompt eval | 12.2 tok/s | 237–279 tok/s | 19–23x |
+| Generation | 10.93 tok/s | 89–112 tok/s | 8–10x |
+| Model size on disk | 1.1 GB | 1.1 GB | parity |
+
+Hardware always stated; throughput and size only. Quality metrics
+(perplexity) are being measured separately and will be added when that run
+completes.
+
+*i2_s baseline note: the i2_s numbers were measured on our ARM-patched
+bitnet.cpp build (NEON i2_s kernels, duplicate-symbol guards), same machine
+and model. They characterise that patched build, not stock bitnet.cpp.*
+
+Contact: code@synapticode.ai · [synapticode.ai](https://synapticode.ai)
+
+---
+
+*Upstream README follows.*
+
 # llama.cpp
 
 ![llama](https://raw.githubusercontent.com/ggml-org/llama.brand/refs/heads/master/cover/llama-cpp/cover-llama-cpp-dark.svg)
