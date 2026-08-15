@@ -122,5 +122,22 @@ against stock bitnet.cpp.
 | Generation | 10.93 tok/s | 89–112 tok/s | 8–10x |
 | Model size on disk | 1.1 GB | 1.1 GB | parity |
 
-Throughput and size only; quality metrics (perplexity) are being measured
-separately and will be published when that run completes.
+## Quality (perplexity) — measured on this tree
+
+llama-perplexity, WikiText-2 raw test set, CPU (`-ngl 0`), substrate = this
+repo at v0.1.0. Same corpus, commands, and binary for both columns.
+
+| n_ctx | bf16 reference | TQ2_0 | relative Δ |
+|-------|---------------|-------|-----------|
+| 512   | 82.09 ± 0.76  | 82.21 ± 0.77 | +0.15% |
+| 2048  | 77.16 ± 0.71  | 77.31 ± 0.71 | +0.19% |
+
+**Quality parity, architecturally grounded:** BitNet b1.58 2B4T is
+QAT-trained natively ternary, and TQ2_0 is its native alphabet — quantising
+to it costs, measured here, under 0.2% relative perplexity. Absolute values
+reflect an instruction-tuned model scored on raw text and are comparable
+only within this methodology; the columns share everything but the weights.
+
+**Conversion correctness:** a fresh bf16 → TQ2_0 conversion on this tree
+reproduces the distributed GGUF **byte-for-byte**
+(sha256 `9f8e1097502528a0d80d885c603ea7ee3e4d214a6685356e39baaf697c02cbb6`).
