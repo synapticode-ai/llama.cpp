@@ -24,14 +24,16 @@ PHASE="${1:?usage: run-protocol.sh t1|t2|t3|t4|t5 [MODEL.gguf ...]}"; shift || t
 TS_RUN="$(date -u +%Y%m%dT%H%M%SZ)"
 OUT="${OUT:-bench_results/protocol_${TS_RUN}.jsonl}"
 mkdir -p "$(dirname "$OUT")"
-THREADS="${THREADS:-$(nproc)}"
+THREADS="${THREADS:-$(nproc 2>/dev/null || sysctl -n hw.ncpu)}"
 PSU="${PSU:-reference-27w-official}"
 COOLING="${COOLING:-active-cooler}"
 REPEATS="${REPEATS:-5}"
+GEN_N="${GEN_N:-512}"
+SUSTAIN_S="${SUSTAIN_S:-600}"
 SUBSTRATE="$(git describe --tags --always 2>/dev/null || echo unknown)"
 BOARD="$(grep -m1 '^Model' /proc/cpuinfo 2>/dev/null | cut -d: -f2- | sed 's/^ //' || uname -m)"
 
-sha() { sha256sum "$1" | cut -d' ' -f1; }
+sha() { (sha256sum "$1" 2>/dev/null || shasum -a 256 "$1") | cut -d' ' -f1; }
 temps() {
   command -v vcgencmd >/dev/null 2>&1 || { echo '"temp_c":null,"throttled":null'; return; }
   local t th
@@ -41,7 +43,7 @@ temps() {
 }
 hdr() { # hdr <test> <model-or-empty>
   local m="$1_model" model="${2:-}" msha="null" mbytes="null"
-  if [ -n "$model" ]; then msha="\"$(sha "$model")\""; mbytes=$(stat -c%s "$model"); fi
+  if [ -n "$model" ]; then msha="\"$(sha "$model")\""; mbytes=$(stat -c%s "$model" 2>/dev/null || stat -f%z "$model"); fi
   echo "\"ts\":\"$(date -u +%FT%TZ)\",\"test\":\"$1\",\"substrate\":\"${SUBSTRATE}\",\"board\":\"${BOARD}\",\"psu\":\"${PSU}\",\"cooling\":\"${COOLING}\",\"threads\":${THREADS},\"model\":\"${model}\",\"model_sha256\":${msha},\"model_bytes\":${mbytes}"
 }
 ask_watts() { # ask_watts <label>  -> echoes number
@@ -62,7 +64,7 @@ t1)
 t2)
   for MODEL in "$@"; do
     echo "== T2 llama-bench pp512/tg128 : $MODEL =="
-    J=$(./build/bin/llama-bench -m "$MODEL" -t "$THREADS" -ngl 0 -p 512 -n 128 -r "$REPEATS" -o json)
+    J=$(./build/bin/llama-bench -m "$MODEL" -t "$THREADS" -ngl 0 -p 512 -n 128 -r "$REPEATS" -o json </dev/null | tr -d "\n")
     rec "$(hdr t2_bench "$MODEL")","$(temps)",\"repeats\":$REPEATS,\"llama_bench\":"$J"
   done
   ;;
@@ -72,20 +74,20 @@ t3)
     echo "Generation starts now; read FNB58 at ~60s in, steady state."
     T0=$(temps)
     START=$(date +%s)
-    LOG=$(./build/bin/llama-cli -m "$MODEL" -t "$THREADS" -ngl 0 -n 512 --ignore-eos \
+    LOG=$(./build/bin/llama-completion -m "$MODEL" -t "$THREADS" -ngl 0 -no-cnv -n "$GEN_N" --ignore-eos \
       -p "Write a detailed field guide to the birds of northern Australia." \
-      --no-display-prompt 2>&1 >/dev/null | grep -E "eval time|sampl" || true)
+      --no-display-prompt </dev/null 2>&1 >/dev/null | grep -E "eval time|sampl" || true)
     DUR=$(( $(date +%s) - START ))
     W=$(ask_watts "sustained-generation")
     TGS=$(echo "$LOG" | grep -oE '[0-9.]+ tokens per second' | tail -1 | grep -oE '^[0-9.]+' || echo null)
-    rec "$(hdr t3_power "$MODEL")",$T0,\"gen_tokens\":512,\"duration_s\":$DUR,\"tg_tok_s\":${TGS:-null},\"watts\":$W
+    rec "$(hdr t3_power "$MODEL")",$T0,\"gen_tokens\":$GEN_N,\"duration_s\":$DUR,\"tg_tok_s\":${TGS:-null},\"watts\":$W
     echo "   tokens/joule and Wh/1k tokens derive offline: tg_tok_s / watts."
   done
   ;;
 t4)
   MODEL="${1:?t4 needs one model}"
   echo "== T4 thermal sustain 10 min : $MODEL =="
-  END=$(( $(date +%s) + 600 ))
+  END=$(( $(date +%s) + SUSTAIN_S ))
   ( while [ "$(date +%s)" -lt "$END" ]; do
       echo "{\"ts\":\"$(date -u +%FT%TZ)\",\"test\":\"t4_thermal_sample\",$(temps)}" >> "$OUT"
       sleep 10
@@ -93,8 +95,8 @@ t4)
   SAMPLER=$!
   N=0
   while [ "$(date +%s)" -lt "$END" ]; do
-    L=$(./build/bin/llama-cli -m "$MODEL" -t "$THREADS" -ngl 0 -n 256 --ignore-eos \
-        -p "Continue the story." --no-display-prompt 2>&1 >/dev/null | grep "eval time" | tail -1)
+    L=$(./build/bin/llama-completion -m "$MODEL" -t "$THREADS" -ngl 0 -no-cnv -n 256 --ignore-eos \
+        -p "Continue the story." --no-display-prompt </dev/null 2>&1 >/dev/null | grep "eval time" | tail -1)
     TGS=$(echo "$L" | grep -oE '[0-9.]+ tokens per second' | grep -oE '^[0-9.]+' || echo null)
     echo "{$(hdr t4_thermal_gen "$MODEL"),$(temps),\"segment\":$((N+=1)),\"tg_tok_s\":${TGS:-null}}" >> "$OUT"
   done
@@ -104,13 +106,15 @@ t4)
 t5)
   for MODEL in "$@"; do
     echo "== T5 memory + load : $MODEL =="
-    sync; command -v sudo >/dev/null && sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches' || echo "(no sudo: cold-load is warm-cache — disclose)"
-    START=$(date +%s.%N)
-    /usr/bin/time -v ./build/bin/llama-cli -m "$MODEL" -t "$THREADS" -ngl 0 -n 8 \
-      -p "hi" --no-display-prompt >/dev/null 2> /tmp/t5_time.txt || true
-    LOAD=$(echo "$(date +%s.%N) - $START" | bc)
-    RSS=$(grep "Maximum resident" /tmp/t5_time.txt | grep -oE '[0-9]+' || echo null)
-    rec "$(hdr t5_memload "$MODEL")","$(temps)",\"cold_load_s\":$LOAD,\"peak_rss_kb\":${RSS:-null}
+    sync; if [ -e /proc/sys/vm/drop_caches ]; then sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches'; else echo "(no drop_caches on this OS: cold-load is warm-cache — disclose)"; fi
+    if /usr/bin/time -v true >/dev/null 2>&1; then TV="-v"; else TV="-l"; fi
+    START=$(perl -MTime::HiRes=time -e 'printf "%.3f", time')
+    /usr/bin/time "$TV" ./build/bin/llama-completion -m "$MODEL" -t "$THREADS" -ngl 0 -no-cnv -n 8 \
+      -p "hi" --no-display-prompt </dev/null >/dev/null 2> /tmp/t5_time.txt || true
+    LOAD=$(perl -MTime::HiRes=time -e "printf \"%.3f\", time - $START")
+    RSS=$(grep -iE "maximum resident" /tmp/t5_time.txt | grep -oE '[0-9]+' | head -1 || echo null)
+    RSSU=$([ "$TV" = "-v" ] && echo kb || echo bytes)
+    rec "$(hdr t5_memload "$MODEL")","$(temps)",\"cold_load_s\":$LOAD,\"peak_rss\":${RSS:-null},\"rss_units\":\"$RSSU\"
   done
   echo "Max usable context: raise -c stepwise with llama-cli until allocation fails; record last-good."
   ;;

@@ -17,10 +17,10 @@ echo "substrate: $(git describe --tags --always) ($(git rev-parse --short HEAD))
 sudo apt-get update -qq && sudo apt-get install -y -qq build-essential cmake libcurl4-openssl-dev time bc
 
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=ON -DLLAMA_CURL=OFF
-cmake --build build --target llama-bench llama-cli llama-server llama-tokenize -j"$(nproc)"
+cmake --build build --target llama-bench llama-cli llama-completion llama-server llama-tokenize -j"$(nproc)"
 
 echo "== binaries =="
-ls -la build/bin/llama-{bench,cli,server}
+ls -la build/bin/llama-{bench,cli,completion,server}
 echo "== sanity =="
 ./build/bin/llama-bench --help >/dev/null && echo "llama-bench OK"
 echo "Build pinned to ${TAG}. Next: scripts/run-protocol.sh t1"
