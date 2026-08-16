@@ -113,8 +113,9 @@ t5)
       -p "hi" --no-display-prompt </dev/null >/dev/null 2> /tmp/t5_time.txt || true
     LOAD=$(perl -MTime::HiRes=time -e "printf \"%.3f\", time - $START")
     RSS=$(grep -iE "maximum resident" /tmp/t5_time.txt | grep -oE '[0-9]+' | head -1 || echo null)
-    RSSU=$([ "$TV" = "-v" ] && echo kb || echo bytes)
-    rec "$(hdr t5_memload "$MODEL")","$(temps)",\"cold_load_s\":$LOAD,\"peak_rss\":${RSS:-null},\"rss_units\":\"$RSSU\"
+    # normalise to kb at capture: GNU time -v reports kbytes, BSD -l bytes
+    if [ "$TV" = "-l" ] && [ "$RSS" != "null" ] && [ -n "$RSS" ]; then RSS=$((RSS / 1024)); fi
+    rec "$(hdr t5_memload "$MODEL")","$(temps)",\"cold_load_s\":$LOAD,\"peak_rss_kb\":${RSS:-null}
   done
   echo "Max usable context: raise -c stepwise with llama-cli until allocation fails; record last-good."
   ;;
