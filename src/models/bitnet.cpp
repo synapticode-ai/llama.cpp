@@ -124,12 +124,16 @@ llama_model_bitnet::graph::graph(const llama_model & model, const llm_graph_para
                 LLM_NORM_RMS, il);
         cb(cur, "ffn_norm", il);
 
+        // BitNet b1.58 2B4T uses squared ReLU (config hidden_act: relu2),
+        // not SiLU — SWIGLU here silently degrades 2B4T (every FFN wrong).
+        // Older 1bitLLM b1.58 checkpoints did use SiLU; the upstream-proper
+        // fix keys this off an activation hparam written at conversion.
         cur = build_ffn(cur,
                 model.layers[il].ffn_up,   NULL, model.layers[il].ffn_up_s,
                 model.layers[il].ffn_gate, NULL, model.layers[il].ffn_gate_s,
                 NULL,                      NULL, NULL,
                 NULL,
-                LLM_FFN_SILU, LLM_FFN_PAR, il);
+                LLM_FFN_RELU_SQR, LLM_FFN_PAR, il);
         cb(cur, "ffn_sub_out", il);
 
         cur = build_norm(cur,

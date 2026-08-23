@@ -37,7 +37,9 @@ class BitnetModel(TextModel):
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         new_name = self.map_tensor_name(name)
 
-        if any(self.match_model_tensor_name(new_name, key, bid) for key in [
+        # LoRA delta tensors (LoraTorchTensor from convert_lora_to_gguf)
+        # are low-rank f16 deltas applied at runtime — never ternary-quantised.
+        if type(data_torch).__name__ != "LoraTorchTensor" and any(self.match_model_tensor_name(new_name, key, bid) for key in [
             gguf.MODEL_TENSOR.ATTN_Q,
             gguf.MODEL_TENSOR.ATTN_K,
             gguf.MODEL_TENSOR.ATTN_V,
