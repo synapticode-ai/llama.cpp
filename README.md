@@ -72,6 +72,13 @@ only within this methodology; the columns share everything but the weights.
 reproduces the distributed GGUF **byte-for-byte**
 (sha256 `9f8e1097502528a0d80d885c603ea7ee3e4d214a6685356e39baaf697c02cbb6`).
 
+**Pi 5 benchmark protocol (public lane).** `scripts/run-protocol-v2.sh` is the
+protocol of record from the 27 Aug 2026 audit: it appends a producer-of-record
+line for every invocation, so each board record carries its producing command
+independently of shell history. `scripts/run-protocol.sh` is the v1 runner
+exactly as run on the board (context pinned to 4096). `scripts/pi-build.sh`
+builds the board binary.
+
 
 *i2_s baseline note: the i2_s numbers were measured on our ARM-patched
 bitnet.cpp build (NEON i2_s kernels, duplicate-symbol guards), same machine
