@@ -79,6 +79,8 @@ independently of shell history. `scripts/run-protocol.sh` is the v1 runner
 exactly as run on the board (context pinned to 4096). `scripts/pi-build.sh`
 builds the board binary.
 
+Substrate of record for the Pi 5 figures: `TAG=v0.1.0-relu2 ./scripts/pi-build.sh`
+
 
 *i2_s baseline note: the i2_s numbers were measured on our ARM-patched
 bitnet.cpp build (NEON i2_s kernels, duplicate-symbol guards), same machine
