@@ -131,6 +131,8 @@ binary for both columns.
 
 **bf16-equivalent quality at 2.06 bits per weight.**
 
+> **Dated note, 2026-09-10.** The PPL gate binary used for the figures in this table predated the 23 Aug 2026 relu2 fix: it ran the 2B4T FFN as SiLU (build-info 010014c29). Re-measured on tag `v0.1.0-relu2` (build-info b936d9918), same corpus (WikiText-2 test, sha256 `bbf94c53…`) and contexts: TQ2_0 c512 14.4815 ± 0.110, c2048 12.5566 ± 0.092; bf16 through the same engine c512 14.5066 ± 0.110, c2048 12.5856 ± 0.092. The conversion delta is parity-class — within the per-leg interval at both contexts, sign not interpreted. Server rows, grounding results and comparator rows stand; the absolute 2B4T PPL rows in the table below are retired.
+
 | n_ctx | bf16 reference | TQ2_0 | relative Δ |
 |-------|---------------|-------|-----------|
 | 512   | 82.09 ± 0.76  | 82.21 ± 0.77 | +0.15% |
